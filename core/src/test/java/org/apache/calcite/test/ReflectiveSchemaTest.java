@@ -762,8 +762,6 @@ public class ReflectiveSchemaTest {
   }
 
   /** Table with single field as Integer[]. */
-  @Disabled(
-      "java.lang.AssertionError RelDataTypeImpl.getFieldList(RelDataTypeImpl.java:99)")
   @Test void testArrayOfBoxedPrimitives() {
     CalciteAssert.that()
         .withSchema("s", CATCHALL)

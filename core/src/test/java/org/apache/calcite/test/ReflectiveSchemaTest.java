@@ -761,11 +761,25 @@ public class ReflectiveSchemaTest {
                 + "empid=4; deptno=10; name=Abd; salary=0.0; commission=null\n");
   }
 
+  @Test void testListInteger() {
+    CalciteAssert.that()
+        .withSchema("s", CATCHALL)
+        .query("select * from \"s\".\"primesList\"")
+        .returnsUnordered("value=1", "value=3", "value=7");
+  }
+
   /** Table with single field as Integer[]. */
   @Test void testArrayOfBoxedPrimitives() {
     CalciteAssert.that()
         .withSchema("s", CATCHALL)
         .query("select * from \"s\".\"primesBoxed\"")
+        .returnsUnordered("value=1", "value=3", "value=7");
+  }
+
+  @Test void testArrayOfBoxedPrimitives2() {
+    CalciteAssert.that()
+        .withSchema("s", CATCHALL)
+        .query("select \"primesBoxed\" from \"s\"")
         .returnsUnordered("value=1", "value=3", "value=7");
   }
 
@@ -1026,6 +1040,8 @@ public class ReflectiveSchemaTest {
     public final Integer[] primesBoxed = {1, 3, 5};
 
     public final int[] primes = {1, 3, 5};
+
+    public final List<Integer> primesList = Arrays.asList(1, 3, 5);
 
     public final IntHolder[] primesCustomBoxed =
         {new IntHolder(1), new IntHolder(3), new IntHolder(5)};

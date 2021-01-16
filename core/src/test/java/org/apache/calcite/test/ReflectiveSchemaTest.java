@@ -34,11 +34,14 @@ import org.apache.calcite.schema.impl.AbstractSchema;
 import org.apache.calcite.schema.impl.TableMacroImpl;
 import org.apache.calcite.schema.impl.ViewTable;
 import org.apache.calcite.util.Smalls;
+import org.apache.calcite.util.Sources;
 import org.apache.calcite.util.TestUtil;
 import org.apache.calcite.util.Util;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
+import org.hamcrest.core.Is;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -65,6 +68,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -78,6 +82,44 @@ public class ReflectiveSchemaTest {
 
   private static final ReflectiveSchema CATCHALL =
       new ReflectiveSchema(new CatchallSchema());
+
+  private static final ImmutableMap<String, String> HR_MODEL = ImmutableMap.of("model",
+      Sources.of(
+          ReflectiveSchemaTest.class.getResource(
+              "/reflective/hr-reflective-model.json")).file().getAbsolutePath());
+
+  private static final ImmutableMap<String, String> HR_MODEL_JVM = ImmutableMap.of("model",
+      Sources.of(
+          ReflectiveSchemaTest.class.getResource(
+              "/reflective/hr-reflective-model-jvm.json")).file().getAbsolutePath());
+
+  private static final ImmutableMap<String, String> HR_MODEL_EXPLICIT = ImmutableMap.of("model",
+      Sources.of(
+          ReflectiveSchemaTest.class.getResource(
+              "/reflective/hr-reflective-model-explicit.json")).file().getAbsolutePath());
+
+  private static final ImmutableMap<String, String> HR_MODEL_EXPLICIT_INCOMPLETE =
+      ImmutableMap.of(
+          "model", Sources.of(
+              ReflectiveSchemaTest.class.getResource(
+          "/reflective/hr-reflective-model-explicit-incomplete.json")).file().getAbsolutePath());
+
+  private static final ImmutableMap<String, String> HR_MODEL_EXPLICIT_TOLERANT =
+      ImmutableMap.of(
+          "model", Sources.of(
+              ReflectiveSchemaTest.class.getResource(
+          "/reflective/hr-reflective-model-explicit-tolerant.json")).file().getAbsolutePath());
+
+  private static final ImmutableMap<String, String> HR_MODEL_EXPLICIT_TOLERANT_NO_FIELDS =
+      ImmutableMap.of(
+          "model", Sources.of(
+              ReflectiveSchemaTest.class.getResource(
+          "/reflective/hr-reflective-model-explicit-no-fields.json")).file().getAbsolutePath());
+
+  private static final ImmutableMap<String, String> HR_MODEL_INVALID = ImmutableMap.of("model",
+      Sources.of(
+          ReflectiveSchemaTest.class.getResource(
+              "/reflective/hr-reflective-model-invalid.json")).file().getAbsolutePath());
 
   /**
    * Test that uses a JDBC connection as a linq4j
@@ -957,7 +999,7 @@ public class ReflectiveSchemaTest {
     }
 
     static Enumerable<Field> fields() {
-      return Linq4j.asEnumerable(EveryType.class.getFields());
+      return Linq4j.asEnumerable(Types.getClassFields(EveryType.class));
     }
 
     static Enumerable<Field> numericFields() {
@@ -1081,5 +1123,122 @@ public class ReflectiveSchemaTest {
         .returnsUnordered(
             "EXPR$0=0",
             "EXPR$0=null");
+  }
+
+  /** Test case for reflective schema with default field ordering. */
+  @Test void testReflectiveDefaultFieldOrdering() {
+    CalciteAssert.that()
+        .with(HR_MODEL)
+        .query("select * from \"hr\".\"emps\"")
+        .returns("empid=100; deptno=10; name=Bill; salary=10000.0; commission=1000\n"
+            + "empid=200; deptno=20; name=Eric; salary=8000.0; commission=500\n"
+            + "empid=150; deptno=10; name=Sebastian; salary=7000.0; commission=null\n"
+            + "empid=110; deptno=10; name=Theodore; salary=11500.0; commission=250\n");
+  }
+
+  /** Test case for reflective schema with JVM-dictated field ordering. */
+  @Test void testReflectiveJVMFieldOrdering() {
+    CalciteAssert.that()
+        .with(HR_MODEL_JVM)
+        .query("select * from \"hr\".\"emps\"")
+        .returns("empid=100; deptno=10; name=Bill; salary=10000.0; commission=1000\n"
+            + "empid=200; deptno=20; name=Eric; salary=8000.0; commission=500\n"
+            + "empid=150; deptno=10; name=Sebastian; salary=7000.0; commission=null\n"
+            + "empid=110; deptno=10; name=Theodore; salary=11500.0; commission=250\n");
+  }
+
+  /** Test case for reflective schema with invalid field ordering. */
+  @Test void testReflectiveInvalidFieldOrdering() {
+    RuntimeException e = assertThrows(RuntimeException.class,
+        () -> CalciteAssert.that()
+            .with(HR_MODEL_INVALID)
+            .query("select * from \"hr\".\"emps\"")
+            .returns("empid=100; deptno=10; name=Bill; salary=10000.0; commission=1000\n"
+                + "empid=200; deptno=20; name=Eric; salary=8000.0; commission=500\n"
+                + "empid=150; deptno=10; name=Sebastian; salary=7000.0; commission=null\n"
+                + "empid=110; deptno=10; name=Theodore; salary=11500.0; commission=250\n"));
+
+    assertThat(e.getMessage(),
+        Is.is("Error instantiating JsonCustomSchema(name=hr)"));
+    assertThat(e.getCause(), Is.isA(RuntimeException.class));
+    assertThat(e.getCause().getMessage(),
+        Is.is("Error deriving fields ordering enumeration: INVALID"));
+  }
+
+  /** Test case for reflective schema with explicit field ordering. */
+  @Test void testReflectiveExplicitFieldOrdering() {
+    CalciteAssert.that()
+        .with(HR_MODEL_EXPLICIT)
+        .query("select * from \"hr\".\"emps\"")
+        .returns("empid=100; deptno=10; name=Bill; salary=10000.0; commission=1000\n"
+            + "empid=200; deptno=20; name=Eric; salary=8000.0; commission=500\n"
+            + "empid=150; deptno=10; name=Sebastian; salary=7000.0; commission=null\n"
+            + "empid=110; deptno=10; name=Theodore; salary=11500.0; commission=250\n");
+  }
+
+  /** Test case for reflective schema with explicit (incomplete) field ordering. */
+  @Test void testReflectiveExplicitFieldOrderingIncompleteListKO() {
+    SQLException e = assertThrows(SQLException.class,
+        () -> CalciteAssert.that()
+            .with(HR_MODEL_EXPLICIT_INCOMPLETE)
+            .query("select * from \"hr\".\"emps\"")
+            .returns("test throws exception"));
+
+    assertThat(e.getMessage(),
+        Is.is("Error while executing SQL \"select * from \"hr\".\"emps\"\": "
+            + "Incomplete list of fields is not compatible with \"EXPLICIT\" field ordering, "
+            + "provided \"[public final int org.apache.calcite.test.JdbcTest$Employee.deptno, "
+            + "public final java.lang.String org.apache.calcite.test.JdbcTest$Employee.name, public"
+            + " final float org.apache.calcite.test.JdbcTest$Employee.salary, public final java"
+            + ".lang.Integer org.apache.calcite.test.JdbcTest$Employee.commission]\",\n"
+            + "while the full list of class fields is \"[public final int org.apache.calcite.test"
+            + ".JdbcTest$Employee.empid, public final int org.apache.calcite.test.JdbcTest$Employee"
+            + ".deptno, public final java.lang.String org.apache.calcite.test.JdbcTest$Employee"
+            + ".name, public final float org.apache.calcite.test.JdbcTest$Employee.salary, public "
+            + "final java.lang.Integer org.apache.calcite.test.JdbcTest$Employee.commission]\",\n"
+            + "missing: [public final int org.apache.calcite.test.JdbcTest$Employee.empid]"));
+  }
+
+  /** Test case for reflective schema with explicit (incomplete) field ordering. */
+  @Test void testReflectiveExplicitTolerantFieldOrdering() {
+    CalciteAssert.that()
+        .with(HR_MODEL_EXPLICIT_TOLERANT)
+        .query("select * from \"hr\".\"emps\"")
+        .returns("commission=1000; empid=100\n"
+            + "commission=500; empid=200\n"
+            + "commission=null; empid=150\n"
+            + "commission=250; empid=110\n");
+  }
+
+  /** Test case for reflective schema with explicit (incomplete) field ordering but no fields. */
+  @Test void testReflectiveExplicitTolerantFieldOrderingNoFieldsKO() {
+    RuntimeException e = assertThrows(RuntimeException.class,
+        () -> CalciteAssert.that()
+            .with(HR_MODEL_EXPLICIT_TOLERANT_NO_FIELDS)
+            .query("select * from \"hr\".\"emps\"")
+            .returns("test throws exception"));
+
+    assertThat(e.getMessage(),
+        Is.is("Error instantiating JsonCustomSchema(name=hr)"));
+    assertThat(e.getCause(), Is.isA(RuntimeException.class));
+    assertThat(e.getCause().getMessage(),
+        Is.is("\"fields\" operand must be provided if fields ordering strategy is either "
+            + "\"EXPLICIT\" or \"EXPLICIT_TOLERANT\""));
+  }
+
+  /** Test case for reflective schema with explicit field ordering but no fields. */
+  @Test void testReflectiveExplicitFieldOrderingNoFieldsKO() {
+    RuntimeException e = assertThrows(RuntimeException.class,
+        () -> CalciteAssert.that()
+            .with(HR_MODEL_EXPLICIT_TOLERANT_NO_FIELDS)
+            .query("select * from \"hr\".\"emps\"")
+            .returns("test throws exception"));
+
+    assertThat(e.getMessage(),
+        Is.is("Error instantiating JsonCustomSchema(name=hr)"));
+    assertThat(e.getCause(), Is.isA(RuntimeException.class));
+    assertThat(e.getCause().getMessage(),
+        Is.is("\"fields\" operand must be provided if fields ordering strategy is either "
+            + "\"EXPLICIT\" or \"EXPLICIT_TOLERANT\""));
   }
 }

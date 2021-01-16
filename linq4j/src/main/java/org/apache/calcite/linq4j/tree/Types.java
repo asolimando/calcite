@@ -25,6 +25,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
@@ -32,8 +33,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
 
@@ -136,6 +139,80 @@ public abstract class Types {
       final Class clazz) {
     // The "length" field of an array does not appear in Class.getFields().
     return new ArrayLengthRecordField(fieldName, clazz);
+  }
+
+  protected static List<Class> getCandidateClasses(Class cls, boolean useHierarchy) {
+    final List<Class> list = new ArrayList<>();
+
+    if (!useHierarchy) {
+      list.add(cls);
+    } else {
+      Class clazz = cls;
+      while (clazz != null && clazz != Object.class) {
+        list.add(0, clazz);
+        clazz = clazz.getSuperclass();
+      }
+    }
+
+    return list;
+  }
+
+  /**
+   * Field comparator using ordering information provided via annotations, if available,
+   * or natural ordering over field names otherwise.
+   *
+   * If only one of the two compared fields has ordering information, it takes precedence.
+   */
+  private static class FieldComparator implements Comparator<Field> {
+
+    @Override public int compare(Field f1, Field f2) {
+      int c;
+      CalciteField ann1 = f1.getAnnotation(CalciteField.class);
+      CalciteField ann2 = f2.getAnnotation(CalciteField.class);
+
+      int f1Order = ann1 == null ? -1 : ann1.order();
+      int f2Order = ann2 == null ? -1 : ann2.order();
+
+      // If only one field has order suggestion (order != -1), it takes precedence
+      if (f1Order == -1 && f2Order != -1) {
+        return 1;
+      }
+      if (f1Order != -1 && f2Order == -1) {
+        return -1;
+      }
+
+      c = Integer.compare(f1Order, f2Order);
+
+      // When comparison on "order" is not conclusive, use type name
+      if (c == 0) {
+        return f1.getName().compareTo(f2.getName());
+      }
+      return c;
+    }
+  }
+
+  private static List<Field> _getClassFields(Class<?> cls) {
+    return Arrays.stream(cls.getDeclaredFields())
+        .filter(f -> Modifier.isPublic(f.getModifiers()))
+        .filter(f -> !Modifier.isStatic(f.getModifiers()))
+        .filter(f -> {
+          CalciteField ann = f.getAnnotation(CalciteField.class);
+          return ann == null || !ann.exclude();
+        })
+        .sorted(new FieldComparator())
+        .collect(Collectors.toList());
+  }
+
+  public static List<Field> getClassFields(Class type, boolean useHierarchy) {
+    List<Field> l = new ArrayList<>();
+    for (Class<?> cls : getCandidateClasses(type, useHierarchy)) {
+      l.addAll(Types._getClassFields(cls));
+    }
+    return l;
+  }
+
+  public static List<Field> getClassFields(Class type) {
+    return getClassFields(type, true);
   }
 
   public static Class toClass(Type type) {

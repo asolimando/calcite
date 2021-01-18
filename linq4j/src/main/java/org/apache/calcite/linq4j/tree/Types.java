@@ -426,7 +426,7 @@ public abstract class Types {
   }
 
   public static Field nthField(int ordinal, Class clazz) {
-    return clazz.getFields()[ordinal];
+    return getClassFields(clazz).get(ordinal);
   }
 
   public static PseudoField nthField(int ordinal, Type clazz) {
@@ -434,7 +434,7 @@ public abstract class Types {
       RecordType recordType = (RecordType) clazz;
       return recordType.getRecordFields().get(ordinal);
     }
-    return field(toClass(clazz).getFields()[ordinal]);
+    return field(getClassFields(toClass(clazz)).get(ordinal));
   }
 
   public static boolean allAssignable(boolean varArgs, Class[] parameterTypes,

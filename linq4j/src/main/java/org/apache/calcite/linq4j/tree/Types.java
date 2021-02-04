@@ -16,7 +16,10 @@
  */
 package org.apache.calcite.linq4j.tree;
 
+import org.apache.calcite.avatica.MetaImpl;
 import org.apache.calcite.linq4j.Enumerator;
+
+import com.google.common.primitives.Primitives;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -26,6 +29,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
@@ -34,8 +38,11 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
@@ -47,6 +54,9 @@ import static java.util.Objects.requireNonNull;
  * @see Primitive
  */
 public abstract class Types {
+  public static final FieldsOrdering DEFAULT_FIELDS_ORDERING =
+      FieldsOrdering.ALPHABETICAL_AND_HIERARCHY;
+
   private Types() {}
 
   /**
@@ -141,7 +151,7 @@ public abstract class Types {
     return new ArrayLengthRecordField(fieldName, clazz);
   }
 
-  protected static List<Class> getCandidateClasses(Class cls, boolean useHierarchy) {
+  private static List<Class> getCandidateClasses(Class cls, boolean useHierarchy) {
     final List<Class> list = new ArrayList<>();
 
     if (!useHierarchy) {
@@ -157,62 +167,163 @@ public abstract class Types {
     return list;
   }
 
-  /**
-   * Field comparator using ordering information provided via annotations, if available,
-   * or natural ordering over field names otherwise.
-   *
-   * If only one of the two compared fields has ordering information, it takes precedence.
-   */
-  private static class FieldComparator implements Comparator<Field> {
-
-    @Override public int compare(Field f1, Field f2) {
-      int c;
-      CalciteField ann1 = f1.getAnnotation(CalciteField.class);
-      CalciteField ann2 = f2.getAnnotation(CalciteField.class);
-
-      int f1Order = ann1 == null ? -1 : ann1.order();
-      int f2Order = ann2 == null ? -1 : ann2.order();
-
-      // If only one field has order suggestion (order != -1), it takes precedence
-      if (f1Order == -1 && f2Order != -1) {
-        return 1;
-      }
-      if (f1Order != -1 && f2Order == -1) {
-        return -1;
-      }
-
-      c = Integer.compare(f1Order, f2Order);
-
-      // When comparison on "order" is not conclusive, use type name
-      if (c == 0) {
-        return f1.getName().compareTo(f2.getName());
-      }
-      return c;
-    }
+  private static List<Field> _getClassFields(Field[] fields) {
+    // no-op comparator
+    return _getClassFields(fields, (f1, f2) -> 0);
   }
 
-  private static List<Field> _getClassFields(Class<?> cls) {
-    return Arrays.stream(cls.getDeclaredFields())
+  private static List<Field> _getClassFields(Field[] fields, Comparator<Field> comparator) {
+    return Arrays.stream(fields)
         .filter(f -> Modifier.isPublic(f.getModifiers()))
         .filter(f -> !Modifier.isStatic(f.getModifiers()))
-        .filter(f -> {
-          CalciteField ann = f.getAnnotation(CalciteField.class);
-          return ann == null || !ann.exclude();
-        })
-        .sorted(new FieldComparator())
+        .sorted(comparator)
         .collect(Collectors.toList());
   }
 
   public static List<Field> getClassFields(Class type, boolean useHierarchy) {
-    List<Field> l = new ArrayList<>();
-    for (Class<?> cls : getCandidateClasses(type, useHierarchy)) {
-      l.addAll(Types._getClassFields(cls));
+    return getClassFields(type, useHierarchy, FieldsOrdering.JVM, null);
+  }
+
+  public static List<Field> getClassFields(Class type, boolean useHierarchy,
+      FieldsOrdering fieldsOrdering, @Nullable Map<Class, List<Field>> classFieldsMap) {
+    if (type.equals(MetaImpl.MetaTable.class)) {
+      return Arrays.asList(type.getFields());
     }
-    return l;
+
+    switch (fieldsOrdering) {
+    case JVM:
+      return _getClassFields(useHierarchy ? type.getFields() : type.getDeclaredFields());
+    case ALPHABETICAL:
+      List<Field> fieldList =
+          _getClassFields(useHierarchy ? type.getFields() : type.getDeclaredFields());
+      fieldList.sort(Comparator.comparing(Field::getName));
+      return fieldList;
+    case ALPHABETICAL_AND_HIERARCHY:
+      return Types.getCandidateClasses(type, useHierarchy).stream()
+          .map(
+              t -> Types._getClassFields(t.getDeclaredFields(),
+              Comparator.comparing(Field::getName)))
+          .flatMap(Collection::stream)
+          .collect(Collectors.toList());
+    case CONSTRUCTOR:
+      return getFieldsFromConstructors(type, useHierarchy);
+    case EXPLICIT:
+    case EXPLICIT_TOLERANT:
+      if (classFieldsMap == null) {
+        throw new IllegalStateException("classFieldsMap cannot be null with field ordering \""
+            + fieldsOrdering.name() + "\"");
+      }
+
+      List<Field> classFields = classFieldsMap.get(type);
+      if (classFields == null) {
+        throw new IllegalArgumentException("Missing fields declaration for type \"" + type
+            + "\" with field ordering \"" + fieldsOrdering.name() + "\"");
+      }
+
+      if (fieldsOrdering == Types.FieldsOrdering.EXPLICIT) {
+        checkFields(type, classFieldsMap, new HashSet<>());
+      }
+
+      return classFields;
+    default:
+      throw new IllegalArgumentException("Unknown fields ordering: " + fieldsOrdering);
+    }
+  }
+
+  private static void checkFields(
+      Class type, Map<Class, List<Field>> classFieldsMap, Set<Class> visitedClasses) {
+    if (visitedClasses.contains(type)) {
+      return;
+    }
+
+    if (!classFieldsMap.containsKey(type)) {
+      throw new IllegalArgumentException("No list of fields for " + type);
+    }
+
+    List<Field> allClassFields = Types.getClassFields(type);
+    List<Field> classFields = classFieldsMap.get(type);
+    if (!classFields.containsAll(allClassFields)
+        || !allClassFields.containsAll(classFields)) {
+      List<Field> missingFields = new ArrayList<>(allClassFields);
+      missingFields.removeAll(classFields);
+      throw new IllegalArgumentException(
+          "Incomplete list of fields is not compatible with \""
+              + Types.FieldsOrdering.EXPLICIT.name()
+              + "\" field ordering, provided \"" + classFields
+              + "\",\nwhile the full list of class fields is \"" + allClassFields
+              + "\",\nmissing: " + missingFields);
+    }
+
+    visitedClasses.add(type);
+
+    for (Field f : allClassFields) {
+      Class fieldType = f.getType();
+      if (fieldType.isArray()) {
+        checkFields(fieldType.getComponentType(), classFieldsMap, visitedClasses);
+      } else if (fieldType == Collection.class) {
+        checkFields(fieldType.getTypeParameters()[0].getClass(), classFieldsMap, visitedClasses);
+      } else if (fieldType == Map.class) {
+        TypeVariable[] typeVariable = fieldType.getTypeParameters();
+        checkFields(typeVariable[0].getClass(), classFieldsMap, visitedClasses);
+        checkFields(typeVariable[1].getClass(), classFieldsMap, visitedClasses);
+      } else if ((!fieldType.isPrimitive()
+          && !Primitives.isWrapperType(fieldType)
+          && !fieldType.equals(String.class))
+          && !fieldType.isInterface()) {
+        checkFields(fieldType, classFieldsMap, visitedClasses);
+      }
+    }
+  }
+
+  private static List<Field> getFieldsFromConstructors(Class type, boolean useHierarchy) {
+    Set<Field> allFields = new HashSet<>(Types.getClassFields(type, useHierarchy));
+    List<List<Field>> candidatesList = new ArrayList<>();
+
+    for (Constructor<?> constructor: type.getDeclaredConstructors()) {
+      List<Field> fields = new ArrayList<>();
+      for (Parameter param : constructor.getParameters()) {
+        // fail fast and use default ordering, if one param has no name, none has
+        if (!param.isNamePresent()) {
+          return getClassFields(type, useHierarchy, DEFAULT_FIELDS_ORDERING, null);
+        }
+        try {
+          Field f = type.getField(param.getName());
+
+          if (!allFields.contains(f)) {
+            continue;
+          }
+          if (f.getType().isAssignableFrom(param.getType())) {
+            fields.add(f);
+          } else {
+            fields.clear();
+            break; // try another constructor, if any
+          }
+        } catch (NoSuchFieldException e) {
+          fields.clear();
+          break; // try another constructor, if any
+        }
+      }
+      if (!fields.isEmpty()) {
+        candidatesList.add(fields);
+      }
+    }
+
+    return candidatesList.stream().max(Comparator.comparingInt(List::size))
+        .orElse(getClassFields(type, useHierarchy, DEFAULT_FIELDS_ORDERING, null));
   }
 
   public static List<Field> getClassFields(Class type) {
     return getClassFields(type, true);
+  }
+
+  /** Various strategies to order fields in the derived SQL type(s). */
+  public enum FieldsOrdering {
+    JVM,
+    ALPHABETICAL,
+    ALPHABETICAL_AND_HIERARCHY,
+    CONSTRUCTOR,
+    EXPLICIT,
+    EXPLICIT_TOLERANT
   }
 
   public static Class toClass(Type type) {

@@ -177,7 +177,7 @@ public abstract class Types {
    * @return the list of fields of a given class.
    */
   public static List<Field> getClassFields(Class type, boolean useHierarchy) {
-    return getClassFields(type, useHierarchy, FieldsOrdering.JVM, null);
+    return getClassFields(type, useHierarchy, FieldsOrdering.CONSTRUCTOR, null);
   }
 
   /**
@@ -309,7 +309,8 @@ public abstract class Types {
   }
 
   private static List<Field> getFieldsFromConstructors(Class type, boolean useHierarchy) {
-    Set<Field> allFields = new HashSet<>(Types.getClassFields(type, useHierarchy));
+    Set<Field> allFields = new HashSet<>(
+        Types.getClassFields(type, useHierarchy, FieldsOrdering.JVM, null));
     List<List<Field>> candidatesList = new ArrayList<>();
 
     for (Constructor<?> constructor: type.getDeclaredConstructors()) {

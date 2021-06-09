@@ -55,7 +55,7 @@ import static java.util.Objects.requireNonNull;
  */
 public abstract class Types {
   public static final FieldsOrdering DEFAULT_FIELDS_ORDERING =
-      FieldsOrdering.ALPHABETICAL_AND_HIERARCHY;
+      FieldsOrdering.JVM;
 
   private Types() {}
 
@@ -181,7 +181,7 @@ public abstract class Types {
   }
 
   public static List<Field> getClassFields(Class type, boolean useHierarchy) {
-    return getClassFields(type, useHierarchy, FieldsOrdering.JVM, null);
+    return getClassFields(type, useHierarchy, FieldsOrdering.CONSTRUCTOR, null);
   }
 
   public static List<Field> getClassFields(Class type, boolean useHierarchy,
@@ -276,7 +276,8 @@ public abstract class Types {
   }
 
   private static List<Field> getFieldsFromConstructors(Class type, boolean useHierarchy) {
-    Set<Field> allFields = new HashSet<>(Types.getClassFields(type, useHierarchy));
+    Set<Field> allFields = new HashSet<>(
+        Types.getClassFields(type, useHierarchy, FieldsOrdering.JVM, null));
     List<List<Field>> candidatesList = new ArrayList<>();
 
     for (Constructor<?> constructor: type.getDeclaredConstructors()) {

@@ -1857,6 +1857,40 @@ class RexProgramTest extends RexProgramTestBase {
         "IS NOT NULL(?0.int0)");
   }
 
+  @Test void testHPLO() {
+    checkSimplify(
+        and(literal(true),
+            or(eq(vInt(), literal(1)),
+               eq(vInt(), literal(2)),
+               eq(vInt(), literal(3))),
+            or(and(literal(true),
+                    eq(vInt(), literal(1)),
+                    ge(vIntNotNull(), literal(10))),
+               and(literal(true),
+                   eq(vInt(), literal(2)),
+                   ge(vIntNotNull(), literal(10)))),
+            and(ge(vIntNotNull(), literal(10)), le(vIntNotNull(), literal(20)))),
+        "AND(AND(?0.notNullInt0>=10,?0.notNullInt0=<=20),OR(?0.int0=1, ?0.int0=2)");
+  }
+
+  @Test void testHPLO2() {
+    checkSimplify(
+        and(or(and(eq(vInt(), literal(1)),
+                    gt(vIntNotNull(), literal(10))),
+                and(eq(vInt(), literal(2)),
+                    gt(vIntNotNull(), literal(10)))),
+            and(ge(vIntNotNull(), literal(10)), le(vIntNotNull(), literal(20)))),
+        "AND(SEARCH(?0.int0, Sarg[1, 2]), SEARCH(?0.notNullInt0, Sarg[[10..20]]))");
+  }
+
+  @Test void testHPLO3() {
+    checkSimplify(
+        and(or(eq(vInt(), literal(1)),
+                eq(vInt(), literal(2))),
+            and(ge(vIntNotNull(), literal(10)), le(vIntNotNull(), literal(20)))),
+        "AND(SEARCH(?0.int0, Sarg[1, 2]), SEARCH(?0.notNullInt0, Sarg[[10..20]]))");
+  }
+
   @Test void testSimplifyUnknown() {
     final RelDataType intType = typeFactory.createSqlType(SqlTypeName.INTEGER);
     final RelDataType rowType = typeFactory.builder()

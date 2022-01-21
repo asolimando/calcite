@@ -1956,6 +1956,7 @@ public class RexSimplify {
    * Modifies the list in place. */
   private RexNode simplifyOrs(List<RexNode> terms, RexUnknownAs unknownAs) {
     final SargCollector sargCollector = new SargCollector(rexBuilder, false);
+    simplifyList(terms, unknownAs);
     final List<RexNode> newTerms = new ArrayList<>();
     terms.forEach(t -> sargCollector.accept(t, newTerms));
     if (sargCollector.needToFix()) {

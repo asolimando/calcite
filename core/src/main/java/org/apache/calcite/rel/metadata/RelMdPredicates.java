@@ -16,6 +16,8 @@
  */
 package org.apache.calcite.rel.metadata;
 
+import com.google.common.collect.Lists;
+
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.plan.RelOptCluster;
 import org.apache.calcite.plan.RelOptPredicateList;
@@ -624,6 +626,7 @@ public class RelMdPredicates
     public RelOptPredicateList inferPredicates(
         boolean includeEqualityInference) {
       final List<RexNode> inferredPredicates = new ArrayList<>();
+      final List<RexNode> nonFieldPredicates = new ArrayList<>();
       final Set<RexNode> allExprs = new HashSet<>(this.allExprs);
       final JoinRelType joinType = joinRel.getJoinType();
       switch (joinType) {
@@ -631,7 +634,7 @@ public class RelMdPredicates
       case INNER:
       case LEFT:
         infer(leftChildPredicates, allExprs, inferredPredicates,
-            includeEqualityInference,
+            nonFieldPredicates, includeEqualityInference,
             joinType == JoinRelType.LEFT ? rightFieldsBitSet
                 : allFieldsBitSet);
         break;
@@ -643,7 +646,7 @@ public class RelMdPredicates
       case INNER:
       case RIGHT:
         infer(rightChildPredicates, allExprs, inferredPredicates,
-            includeEqualityInference,
+            nonFieldPredicates, includeEqualityInference,
             joinType == JoinRelType.RIGHT ? leftFieldsBitSet
                 : allFieldsBitSet);
         break;
@@ -669,6 +672,21 @@ public class RelMdPredicates
           leftInferredPredicates.add(iP.accept(leftPermute));
         } else if (rightFieldsBitSet.contains(iPBitSet)) {
           rightInferredPredicates.add(iP.accept(rightPermute));
+        }
+      }
+
+      if ((joinType == JoinRelType.INNER || joinType == JoinRelType.SEMI)
+          && !nonFieldPredicates.isEmpty()) {
+        // Predicates without field references can be pushed to both inputs
+        final Set<RexNode> leftPredicatesSet = new HashSet<>(leftInferredPredicates);
+        final Set<RexNode> rightPredicatesSet = new HashSet<>(rightInferredPredicates);
+        for (RexNode nonFieldPredicate : nonFieldPredicates) {
+          if (!leftPredicatesSet.contains(nonFieldPredicate)) {
+            leftInferredPredicates.add(nonFieldPredicate);
+          }
+          if (!rightPredicatesSet.contains(nonFieldPredicate)) {
+            rightInferredPredicates.add(nonFieldPredicate);
+          }
         }
       }
 
@@ -699,7 +717,8 @@ public class RelMdPredicates
             RelOptUtil.conjunctions(rightChildPredicates),
             inferredPredicates, EMPTY_LIST);
       default:
-        assert inferredPredicates.size() == 0;
+        assert inferredPredicates.isEmpty() : "For " + joinType + " join type "
+            + " the inferred predicates should be empty, found " + inferredPredicates;
         return RelOptPredicateList.EMPTY;
       }
     }
@@ -713,29 +732,36 @@ public class RelMdPredicates
     }
 
     private void infer(@Nullable RexNode predicates, Set<RexNode> allExprs,
-        List<RexNode> inferredPredicates, boolean includeEqualityInference,
-        ImmutableBitSet inferringFields) {
+        List<RexNode> inferredPredicates, List<RexNode> nonFieldsPredicates,
+        boolean includeEqualityInference, ImmutableBitSet inferringFields) {
       for (RexNode r : RelOptUtil.conjunctions(predicates)) {
         if (!includeEqualityInference
             && equalityPredicates.contains(r)) {
           continue;
         }
-        for (Mapping m : mappings(r)) {
-          RexNode tr = r.accept(
-              new RexPermuteInputsShuttle(m, joinRel.getInput(0),
-                  joinRel.getInput(1)));
-          // Filter predicates can be already simplified, so we should work with
-          // simplified RexNode versions as well. It also allows prevent of having
-          // some duplicates in in result pulledUpPredicates
-          RexNode simplifiedTarget =
-              simplify.simplifyFilterPredicates(RelOptUtil.conjunctions(tr));
-          if (simplifiedTarget == null) {
-            simplifiedTarget = joinRel.getCluster().getRexBuilder().makeLiteral(false);
+        Iterable<Mapping> ms = mappings(r);
+        if (ms.iterator().hasNext()) {
+          for (Mapping m : mappings(r)) {
+            RexNode tr = r.accept(
+                new RexPermuteInputsShuttle(m, joinRel.getInput(0),
+                    joinRel.getInput(1)));
+            // Filter predicates can be already simplified, so we should work with
+            // simplified RexNode versions as well. It also allows prevent of having
+            // some duplicates in in result pulledUpPredicates
+            RexNode simplifiedTarget =
+                simplify.simplifyFilterPredicates(RelOptUtil.conjunctions(tr));
+            if (simplifiedTarget == null) {
+              simplifiedTarget = joinRel.getCluster().getRexBuilder().makeLiteral(false);
+            }
+            if (checkTarget(inferringFields, allExprs, tr)
+                && checkTarget(inferringFields, allExprs, simplifiedTarget)) {
+              inferredPredicates.add(simplifiedTarget);
+              allExprs.add(simplifiedTarget);
+            }
           }
-          if (checkTarget(inferringFields, allExprs, tr)
-              && checkTarget(inferringFields, allExprs, simplifiedTarget)) {
-            inferredPredicates.add(simplifiedTarget);
-            allExprs.add(simplifiedTarget);
+        } else {
+          if (!isAlwaysTrue(r)) {
+            nonFieldsPredicates.add(r);
           }
         }
       }

@@ -1935,36 +1935,19 @@ public class RelMetadataTest {
   /** Unit test for
    * {@link org.apache.calcite.rel.metadata.RelMdPredicates#getPredicates(Join, RelMetadataQuery)}. */
   @Test void testPredicatesJoinNonFieldPredicate() {
-    final Project rel = (Project) sql("select * from emp, dept").toRel();
-    final RelOptTable empTable = rel.getInput().getInput(0).getTable();
-    final RelOptTable deptTable = rel.getInput().getInput(1).getTable();
-    final RelOptCluster cluster = rel.getInput().getCluster();
-    final RelBuilder relBuilder = RelBuilder.proto().create(cluster, null);
-
-    // build first join operand
-    final LogicalTableScan empScan = LogicalTableScan.create(
-        cluster, empTable, ImmutableList.of());
-    relBuilder.push(empScan);
-    relBuilder.filter(relBuilder.equals(relBuilder.field(7), relBuilder.literal(1)));
-    relBuilder.filter(relBuilder.greaterThanOrEqual(
-        relBuilder.call(SqlStdOperatorTable.RAND), relBuilder.literal(5)));
-
-    // build second join operand
-    final LogicalTableScan deptScan = LogicalTableScan.create(
-        cluster, deptTable, ImmutableList.of());
-    relBuilder.push(deptScan);
-    relBuilder.join(JoinRelType.INNER,
-        relBuilder.equals(relBuilder.field(2, 0, "DEPTNO"),
-            relBuilder.field(2, 1, "DEPTNO")));
-
-    final Join j = (Join) relBuilder.build();
+    final Project p = (Project) sql("select * from "
+        + "(select * from emp where year(current_timestamp) >= 2010 and deptno = 1) as emp "
+        + "join dept on emp.deptno = dept.deptno").toRel();
+    final Join j = (Join) p.getInput();
     final RelMetadataQuery mq = j.getCluster().getMetadataQuery();
-
-    RelOptPredicateList predicates = mq.getPulledUpPredicates(j);
-    assertThat(predicates.pulledUpPredicates,
-        sortsAs("[=($7, $9), =($7, 1), =($9, 1), >=(RAND(), 5)]"));
-    assertThat(predicates.leftInferredPredicates, sortsAs("[>=(RAND(), 5)]"));
-    assertThat(predicates.rightInferredPredicates, sortsAs("[=($0, 1), >=(RAND(), 5)]"));
+    System.out.println(RelOptUtil.toString(j));
+    final RelOptPredicateList predicates = mq.getPulledUpPredicates(j);
+    assertThat(predicates.pulledUpPredicates, sortsAs(
+        "[=($7, $9), =($7, 1), =($9, 1), >=(EXTRACT(FLAG(YEAR), CURRENT_TIMESTAMP), 2010)]"));
+    assertThat(predicates.leftInferredPredicates, sortsAs(
+        "[>=(EXTRACT(FLAG(YEAR), CURRENT_TIMESTAMP), 2010)]"));
+    assertThat(predicates.rightInferredPredicates, sortsAs(
+        "[=($0, 1), >=(EXTRACT(FLAG(YEAR), CURRENT_TIMESTAMP), 2010)]"));
   }
 
   /**

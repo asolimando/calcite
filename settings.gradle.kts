@@ -38,6 +38,7 @@ pluginManagement {
         idv("org.jetbrains.gradle.plugin.idea-ext")
         idv("org.nosphere.apache.rat")
         idv("org.owasp.dependencycheck")
+        idv("org.sonarqube")
         kotlin("jvm") version "kotlin".v()
     }
     if (extra.has("enableMavenLocal") && extra["enableMavenLocal"].toString().ifBlank { "true" }.toBoolean()) {

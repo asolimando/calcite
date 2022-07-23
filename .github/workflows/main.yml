@@ -325,4 +325,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./gradlew build sonarqube --info -Dsonar.host.url=https://sonarcloud.io -Dsonar.verbose=true -Dsonar.organization=asolimando -Dsonar.projectKey=asolimando_calcite
+        run: ./gradlew test sonarqube --info -Dsonar.host.url=https://sonarcloud.io -Dsonar.verbose=true -Dsonar.organization=asolimando -Dsonar.projectKey=asolimando_calcite

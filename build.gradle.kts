@@ -56,6 +56,7 @@ plugins {
     id("com.github.vlsi.stage-vote-release")
     id("com.autonomousapps.dependency-analysis") apply false
     // Static Analysis
+    id("jacoco")
     id("org.sonarqube")
 }
 
@@ -491,6 +492,20 @@ allprojects {
             }
         }
 
+        apply(plugin = "jacoco")
+        configure<JacocoPluginExtension> {
+            toolVersion = "0.8.7"
+            reportsDirectory.set(file("$buildDir/customJacocoReportDir"))
+        }
+        tasks.register<JacocoReport>("jacocoReport") {
+            dependsOn(tasks.withType<Test>())
+            reports {
+                html.required.set(true)
+                xml.required.set(true)
+                csv.required.set(false)
+            }
+        }
+
         if (!skipAutostyle) {
             autostyle {
                 java {
@@ -776,7 +791,7 @@ allprojects {
 
         // Note: jars below do not normalize line endings.
         // Those jars, however are not included to source/binary distributions
-        // so the normailzation is not that important
+        // so the normalization is not that important
 
         val testJar by tasks.registering(Jar::class) {
             from(sourceSets["test"].output)

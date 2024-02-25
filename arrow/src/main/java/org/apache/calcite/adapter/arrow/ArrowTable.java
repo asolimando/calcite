@@ -100,7 +100,7 @@ public class ArrowTable extends AbstractTable
     final Projector projector;
     final Filter filter;
 
-    if (conditions.size() == 0) {
+    if (conditions.isEmpty()) {
       filter = null;
 
       final List<ExpressionTree> expressionTrees = new ArrayList<>();
@@ -144,7 +144,7 @@ public class ArrowTable extends AbstractTable
       }
     }
 
-    return new ArrowEnumerable(arrowFileReader, projector, filter, fields);
+    return new ArrowEnumerable(arrowFileReader, fields, projector, filter);
   }
 
   @Override public <T> Queryable<T> asQueryable(QueryProvider queryProvider,

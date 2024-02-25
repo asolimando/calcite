@@ -32,13 +32,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 class ArrowEnumerable extends AbstractEnumerable<Object> {
   private final ArrowFileReader arrowFileReader;
+  private final ImmutableIntList fields;
   private final @Nullable Projector projector;
   private final @Nullable Filter filter;
-  private final ImmutableIntList fields;
 
-  ArrowEnumerable(ArrowFileReader arrowFileReader,
-      @Nullable Projector projector, @Nullable Filter filter,
-      ImmutableIntList fields) {
+  ArrowEnumerable(ArrowFileReader arrowFileReader, ImmutableIntList fields,
+      @Nullable Projector projector, @Nullable Filter filter) {
     this.arrowFileReader = arrowFileReader;
     this.projector = projector;
     this.filter = filter;
@@ -47,7 +46,13 @@ class ArrowEnumerable extends AbstractEnumerable<Object> {
 
   @Override public Enumerator<Object> enumerator() {
     try {
-      return new ArrowEnumerator(projector, filter, fields, arrowFileReader);
+      if (projector != null) {
+        return new ArrowProjectEnumerator(arrowFileReader, fields, projector);
+      } else if (filter != null) {
+        return new ArrowFilterEnumerator(arrowFileReader, fields, filter);
+      }
+      throw new IllegalArgumentException(
+          "The arrow enumerator must have either a filter or a projection");
     } catch (Exception e) {
       throw Util.toUnchecked(e);
     }

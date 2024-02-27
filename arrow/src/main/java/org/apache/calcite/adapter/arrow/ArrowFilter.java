@@ -60,6 +60,6 @@ class ArrowFilter extends Filter implements ArrowRel {
 
   @Override public void implement(Implementor implementor) {
     implementor.visitInput(0, getInput());
-    implementor.add(null, match);
+    implementor.addFilters(match);
   }
 }

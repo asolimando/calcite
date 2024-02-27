@@ -43,18 +43,20 @@ public interface ArrowRel extends RelNode {
     @Nullable RelOptTable table;
     @Nullable ArrowTable arrowTable;
 
-    /** Adds newly projected fields and restricted predicates.
+    /** Adds new predicates.
      *
-     * @param fields New fields to be projected from a query
      * @param predicates Predicates
      */
-    void add(@Nullable List<Integer> fields, @Nullable List<String> predicates) {
-      if (fields != null) {
-        selectFields = ImmutableIntList.copyOf(fields);
-      }
-      if (predicates != null) {
-        whereClause.addAll(predicates);
-      }
+    void addFilters(List<String> predicates) {
+      whereClause.addAll(predicates);
+    }
+
+    /** Adds newly projected fields.
+     *
+     * @param fields New fields to be projected from a query
+     */
+    void addProjectFields(List<Integer> fields) {
+      selectFields = ImmutableIntList.copyOf(fields);
     }
 
     public void visitInput(int ordinal, RelNode input) {

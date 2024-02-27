@@ -65,7 +65,10 @@ class ArrowProject extends Project implements ArrowRel {
 
   @Override public void implement(Implementor implementor) {
     implementor.visitInput(0, getInput());
-    implementor.add(getProjectFields(getProjects()), null);
+    List<Integer> projectedFields = getProjectFields(getProjects());
+    if (projectedFields != null) {
+      implementor.addProjectFields(projectedFields);
+    }
   }
 
   static @Nullable List<Integer> getProjectFields(List<RexNode> exps) {

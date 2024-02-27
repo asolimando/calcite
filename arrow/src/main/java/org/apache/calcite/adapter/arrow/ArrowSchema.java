@@ -28,7 +28,10 @@ import org.apache.arrow.vector.ipc.SeekableReadChannel;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
 
+import org.apache.calcite.util.trace.CalciteTrace;
+
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -44,6 +47,8 @@ import static java.util.Objects.requireNonNull;
  * Schema mapped onto a set of Arrow files.
  */
 class ArrowSchema extends AbstractSchema {
+
+  protected static final Logger LOGGER = CalciteTrace.getPlannerTracer();
   private final Supplier<Map<String, Table>> tableMapSupplier;
 
   /**
@@ -85,7 +90,7 @@ class ArrowSchema extends AbstractSchema {
   private static Map<String, Table> deduceTableMap(File baseDirectory) {
     File[] files = baseDirectory.listFiles((dir, name) -> name.endsWith(".arrow"));
     if (files == null) {
-      System.out.println("directory " + baseDirectory + " not found");
+      LOGGER.info("directory {} not found", baseDirectory);
       return ImmutableMap.of();
     }
 

@@ -88,7 +88,9 @@ class ArrowFilterEnumerator extends AbstractArrowEnumerator {
 
   @Override public void close() {
     try {
-      buf.close();
+      if (buf != null) {
+        buf.close();
+      }
       filter.close();
     } catch (GandivaException e) {
       throw Util.toUnchecked(e);

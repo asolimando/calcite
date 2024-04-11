@@ -2502,9 +2502,10 @@ public class RelBuilder {
           newProjects.add(project.getProjects().get(i));
           builder.add(project.getRowType().getFieldList().get(i));
         }
+
         r =
-            project.copy(cluster.traitSet(), project.getInput(), newProjects,
-                builder.build());
+            project.copy(project.getTraitSet().apply(targetMapping), project.getInput(),
+                newProjects, builder.build());
       } else {
         groupSetAfterPruning = groupSet;
         groupSetsAfterPruning = groupSets;

@@ -547,6 +547,31 @@ public class RelBuilderTest {
     assertThat(root, matcher);
   }
 
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/projects/CALCITE/issues/CALCITE-6340">
+   * [CALCITE-6340] RelBuilder always creates Project with Convention.NONE during aggregate_.</a>.
+   */
+  @Test void testPruneProjectInputOfAggregatePreservesTraitSet() {
+    final RelBuilder builder = createBuilder(config -> config.withPruneInputOfAggregate(true));
+
+    // This issue only occurs when projecting more columns than there are fields and putting
+    // an aggregate over that projection.
+    RelNode root =
+        builder.scan("DEPT")
+            .adoptConvention(EnumerableConvention.INSTANCE)
+            .project(builder.alias(builder.field(0), "a"),
+                builder.alias(builder.field(1), "b"),
+                builder.alias(builder.field(2), "c"),
+                builder.alias(builder.field(1), "d"))
+            .aggregate(builder.groupKey(0, 1, 2, 1),
+                builder.aggregateCall(SqlStdOperatorTable.SUM,
+                    builder.field(0)))
+            .build();
+
+    // Verify that the project under the aggregate kept the EnumerableConvention.INSTANCE trait.
+    assertTrue(root.getInput(0).getTraitSet().contains(EnumerableConvention.INSTANCE));
+  }
+
   @Test void testScanFilterOr() {
     // Equivalent SQL:
     //   SELECT *

@@ -1452,7 +1452,8 @@ public class RelBuilderTest {
 
   /** Test case for
    * <a href="https://issues.apache.org/jira/browse/CALCITE/issues/CALCITE-6340">
-   * [CALCITE-6340] RelBuilder drops set conventions when aggregating over duplicate projected fields.</a>.
+   * [CALCITE-6340] RelBuilder drops set conventions when aggregating over duplicate
+   * projected fields.</a>.
    */
   @Test void testPruneProjectInputOfAggregatePreservesTraitSet() {
     final RelBuilder builder = createBuilder(config -> config.withPruneInputOfAggregate(true));
@@ -1463,7 +1464,8 @@ public class RelBuilderTest {
         .adoptConvention(EnumerableConvention.INSTANCE)
         .project(builder.alias(builder.field(0), "a"),
             builder.alias(builder.field(0), "b"))
-        .aggregate(builder.groupKey(0), builder.aggregateCall(
+        .aggregate(
+            builder.groupKey(0), builder.aggregateCall(
             SqlStdOperatorTable.SUM, builder.field(0))).build();
 
     // Verify that the project under the aggregate kept the EnumerableConvention.INSTANCE trait.

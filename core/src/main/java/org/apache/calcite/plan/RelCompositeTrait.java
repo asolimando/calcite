@@ -17,13 +17,18 @@
 package org.apache.calcite.plan;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
+
+import org.apache.calcite.util.mapping.Mappings;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * A trait that consists of a list of traits, all of the same type.
@@ -116,4 +121,5 @@ class RelCompositeTrait<T extends RelMultipleTrait> implements RelTrait {
   public int size() {
     return traits.length;
   }
+
 }

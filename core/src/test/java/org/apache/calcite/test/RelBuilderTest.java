@@ -24,7 +24,11 @@ import org.apache.calcite.plan.Convention;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelTraitDef;
 import org.apache.calcite.plan.RelTraitSet;
+import org.apache.calcite.rel.RelCollation;
+import org.apache.calcite.rel.RelCollationImpl;
+import org.apache.calcite.rel.RelCollationTraitDef;
 import org.apache.calcite.rel.RelCollations;
+import org.apache.calcite.rel.RelDistribution;
 import org.apache.calcite.rel.RelDistributions;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.AggregateCall;
@@ -80,6 +84,7 @@ import org.apache.calcite.tools.RuleSet;
 import org.apache.calcite.tools.RuleSets;
 import org.apache.calcite.util.Holder;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.ImmutableIntList;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Smalls;
 import org.apache.calcite.util.TimestampString;
@@ -1455,7 +1460,7 @@ public class RelBuilderTest {
    * [CALCITE-6340] RelBuilder drops set conventions when aggregating over duplicate
    * projected fields.</a>.
    */
-  @Test void testPruneProjectInputOfAggregatePreservesTraitSet() {
+  @Test void testPruneProjectInputOfAggregatePreservesConvention() {
     final RelBuilder builder = createBuilder(config -> config.withPruneInputOfAggregate(true));
 
     // This issue only occurs when projecting more columns than there are fields and putting

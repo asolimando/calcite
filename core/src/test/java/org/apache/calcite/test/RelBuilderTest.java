@@ -1476,11 +1476,13 @@ public class RelBuilderTest {
             EnumerableRules.ENUMERABLE_SORT_RULE,
             EnumerableRules.ENUMERABLE_TABLE_SCAN_RULE);
     Program program = Programs.of(prepareRules);
-    node = program.run(node.getCluster().getPlanner(), node,
-        desiredTraits, ImmutableList.of(), ImmutableList.of());
+    node =
+        program.run(node.getCluster().getPlanner(), node, desiredTraits, ImmutableList.of(),
+            ImmutableList.of());
 
     node = builder.push(node)
-        .aggregate(builder.groupKey(0), builder.aggregateCall(
+        .aggregate(
+            builder.groupKey(0), builder.aggregateCall(
             SqlStdOperatorTable.SUM, builder.field(0)))
         .build();
 
@@ -1517,13 +1519,15 @@ public class RelBuilderTest {
         RuleSets.ofList(EnumerableRules.ENUMERABLE_PROJECT_RULE,
             EnumerableRules.ENUMERABLE_TABLE_SCAN_RULE);
     Program program = Programs.of(prepareRules);
-    node = program.run(node.getCluster().getPlanner(), node,
-        desiredTraits, ImmutableList.of(), ImmutableList.of());
+    node =
+        program.run(node.getCluster().getPlanner(), node, desiredTraits, ImmutableList.of(),
+            ImmutableList.of());
 
     node = node.copy(desiredTraits.plus(RelDistributions.BROADCAST_DISTRIBUTED), node.getInputs());
 
     node = builder.push(node)
-        .aggregate(builder.groupKey(0), builder.aggregateCall(
+        .aggregate(
+            builder.groupKey(0), builder.aggregateCall(
             SqlStdOperatorTable.SUM, builder.field(0)))
         .build();
 

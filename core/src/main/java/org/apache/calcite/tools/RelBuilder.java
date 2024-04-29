@@ -2504,7 +2504,7 @@ public class RelBuilder {
         }
 
         r =
-            project.copy(project.getTraitSet(), project.getInput(),
+            project.copy(project.getTraitSet().apply(targetMapping), project.getInput(),
                 newProjects, builder.build());
       } else {
         groupSetAfterPruning = groupSet;

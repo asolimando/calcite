@@ -24,8 +24,10 @@ import org.apache.calcite.plan.Convention;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelTraitDef;
 import org.apache.calcite.plan.RelTraitSet;
+import org.apache.calcite.rel.RelCollation;
 import org.apache.calcite.rel.RelCollations;
 import org.apache.calcite.rel.RelDistributions;
+import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.Correlate;
@@ -1448,6 +1450,86 @@ public class RelBuilderTest {
         + "  LogicalAggregate(group=[{0, 2, 3, 4}], S1=[SUM($1)], C=[COUNT()], S2=[SUM($2)])\n"
         + "    LogicalTableScan(table=[[scott, EMP]])\n";
     assertThat(root, hasTree(expected));
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE/issues/CALCITE-6340">
+   * [CALCITE-6340] RelBuilder drops set conventions when aggregating over duplicate
+   * projected fields.</a>.
+   */
+  @Test void testPruneProjectInputOfAggregatePreservesConventionAndCollations() {
+    final RelBuilder builder = createBuilder(config -> config.withPruneInputOfAggregate(true));
+
+    RelNode node = builder
+        .scan("EMP")
+        .sort(builder.nullsLast(builder.desc(builder.field(0))),
+            builder.field(1))
+        .project(builder.alias(builder.field(0), "a"),
+            builder.alias(builder.field(1), "b"),
+            builder.alias(builder.field(0), "c"),
+            builder.alias(builder.field(1), "d"))
+        .build();
+
+    RelTraitSet desiredTraits = builder.getCluster().traitSet()
+        .replace(EnumerableConvention.INSTANCE);
+
+    RuleSet prepareRules =
+        RuleSets.ofList(EnumerableRules.ENUMERABLE_PROJECT_RULE,
+            EnumerableRules.ENUMERABLE_SORT_RULE,
+            EnumerableRules.ENUMERABLE_TABLE_SCAN_RULE);
+    Program program = Programs.of(prepareRules);
+    node = program.run(node.getCluster().getPlanner(), node,
+        desiredTraits, ImmutableList.of(), ImmutableList.of());
+
+    node = builder.push(node)
+        .aggregate(builder.groupKey(0), builder.aggregateCall(
+            SqlStdOperatorTable.SUM, builder.field(0)))
+        .build();
+
+    RelTraitSet relTraitSet = node.getInput(0).getTraitSet();
+
+    final RelCollation collation1 = RelCollations.of(new RelFieldCollation(1,
+            RelFieldCollation.Direction.DESCENDING, RelFieldCollation.NullDirection.LAST),
+        new RelFieldCollation(0));
+
+    assertTrue(relTraitSet.contains(EnumerableConvention.INSTANCE));
+    assertTrue(relTraitSet.getTrait(1).satisfies(collation1));
+  }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE/issues/CALCITE-6340">
+   * [CALCITE-6340] RelBuilder drops set conventions when aggregating over duplicate
+   * projected fields.</a>.
+   */
+  @Test void testPruneProjectInputOfAggregatePreservesConventionAndDistribution() {
+    final RelBuilder builder = createBuilder(config -> config.withPruneInputOfAggregate(true));
+
+    RelNode node = builder
+        .scan("EMP")
+        .project(builder.alias(builder.field(0), "a"),
+            builder.alias(builder.field(0), "b"),
+            builder.alias(builder.field(1), "c"))
+        .build();
+    RelTraitSet desiredTraits = builder.getCluster().traitSet()
+        .replace(EnumerableConvention.INSTANCE);
+
+    RuleSet prepareRules =
+        RuleSets.ofList(EnumerableRules.ENUMERABLE_PROJECT_RULE,
+            EnumerableRules.ENUMERABLE_TABLE_SCAN_RULE);
+    Program program = Programs.of(prepareRules);
+    node = program.run(node.getCluster().getPlanner(), node,
+        desiredTraits, ImmutableList.of(), ImmutableList.of());
+
+    node = node.copy(desiredTraits.plus(RelDistributions.BROADCAST_DISTRIBUTED), node.getInputs());
+
+    node = builder.push(node)
+        .aggregate(builder.groupKey(0), builder.aggregateCall(
+            SqlStdOperatorTable.SUM, builder.field(0)))
+        .build();
+
+    RelTraitSet relTraitSet = node.getInput(0).getTraitSet();
+    assertTrue(relTraitSet.contains(EnumerableConvention.INSTANCE));
+    assertTrue(relTraitSet.contains(RelDistributions.BROADCAST_DISTRIBUTED));
   }
 
   /** Test case for

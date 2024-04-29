@@ -210,6 +210,12 @@ public abstract class Bug {
    * Support FORMAT in CAST from Numeric and BYTES to String (Enabled in BigQuery)</a> is fixed. */
   public static final boolean CALCITE_6270_FIXED = false;
 
+  /** Whether
+   * <a href="https://issues.apache.org/jira/browse/CALCITE/issues/CALCITE-6340">
+   * [CALCITE-6340] RelBuilder drops set conventions when aggregating over duplicate
+   * projected fields</a> is fixed. */
+  public static final boolean CALCITE_6340_FIXED = false;
+
   /**
    * Use this to flag temporary code.
    */

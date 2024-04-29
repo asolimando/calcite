@@ -1457,9 +1457,6 @@ public class RelBuilderTest {
    */
   @Test void testPruneProjectInputOfAggregatePreservesConvention() {
     final RelBuilder builder = createBuilder(config -> config.withPruneInputOfAggregate(true));
-
-    // This issue only occurs when projecting more columns than there are fields and putting
-    // an aggregate over that projection.
     final RelNode root = builder.scan("DEPT")
         .adoptConvention(EnumerableConvention.INSTANCE)
         .project(builder.alias(builder.field(0), "a"),
@@ -1468,7 +1465,6 @@ public class RelBuilderTest {
             builder.groupKey(0), builder.aggregateCall(
             SqlStdOperatorTable.SUM, builder.field(0))).build();
 
-    // Verify that the project under the aggregate kept the EnumerableConvention.INSTANCE trait.
     assertTrue(root.getInput(0).getTraitSet().contains(EnumerableConvention.INSTANCE));
   }
 

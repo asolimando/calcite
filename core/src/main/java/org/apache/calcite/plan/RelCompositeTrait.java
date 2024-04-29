@@ -116,5 +116,4 @@ class RelCompositeTrait<T extends RelMultipleTrait> implements RelTrait {
   public int size() {
     return traits.length;
   }
-
 }
